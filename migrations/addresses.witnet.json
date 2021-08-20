@@ -1,56 +1,40 @@
 {
   "default": {
     "ethereum.goerli" : {
-      "WitnetDecoderLib": "",
-      "WitnetParserLib": "",
-      "WitnetProxy": "",
-      "WitnetRequestBoard": ""
+      "WitnetParserLib": "0x52CbB9D63A50e79b05dEC3Ab73ff89ef5A8E35D7",
+      "WitnetRequestBoard": "0xD43e6D27D995bf9542F8CfE524c54Ad3A1Cd413A"
     },
     "ethereum.kovan": {
-      "WitnetDecoderLib": "",
       "WitnetParserLib": "",
-      "WitnetProxy": "",
       "WitnetRequestBoard": ""
     },
     "ethereum.rinkeby" : {
-      "WitnetDecoderLib": "0x86D1fc144678BE54eca868B4A604c017bCFC8F97",
-      "WitnetParserLib": "0x7D470A0dA6f1eDFe230168420f2ea118133B6C67",
-      "WitnetProxy": "0x32B3E31FAaF66186227CBD8d30545914959abF41",
-      "WitnetRequestBoard": "0x6626C8CB9F62271c62dafF55EEA9f15cA2886fc3"
+      "WitnetParserLib": "0xa19D7A918af816a2F17160b74f6b55c48BB7B539",
+      "WitnetRequestBoard": "0x36ab014aAF373E9848F59D76CB257Cc3F0A88F69"
     },
     "ethereum.mainnet": {
-      "WitnetDecoderLib": "",
       "WitnetParserLib": "",
-      "WitnetProxy": "",
       "WitnetRequestBoard": ""
     }
   },
   "conflux": {
     "conflux.testnet": {
-      "WitnetDecoderLib": "",
-      "WitnetParserLib": "",
-      "WitnetProxy": "",
-      "WitnetRequestBoard": ""
+      "WitnetParserLib": "0x8b1251812F264dC0168729a49DEcd4288ab3Ca51",
+      "WitnetRequestBoard": "0x82BBEe2e459ed9d5e0CfCCB309De725257fCf9A2"
     },
     "conflux.tethys": {
-      "WitnetDecoderLib": "",
       "WitnetParserLib": "",
-      "WitnetProxy": "",
       "WitnetRequestBoard": ""
     }
   },
   "omgx": {
     "test": {
-      "WitnetDecoderLib": "",
       "WitnetParserLib": "",
-      "WitnetProxy": "",
-      "WitnetRequestBoard": ""
+      "WitnetRequestBoard": "0xB0ACfe9D4eed4EFc10378d2328ac279f071dBd1F"
     },
     "omgx.rinkeby": {
-      "WitnetDecoderLib": "",
       "WitnetParserLib": "",
-      "WitnetProxy": "",
-      "WitnetRequestBoard": ""
+      "WitnetRequestBoard": "0xB0ACfe9D4eed4EFc10378d2328ac279f071dBd1F"
     }
   }
 }
