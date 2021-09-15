@@ -23,9 +23,19 @@ module.exports = {
         /* _isUpgradable */ true,
         /* _versionTag */ fromAscii(packageJson.version + "-trustable-boba"),
         /* _l2GasPrice */ 15000000,
+        /* _l2ReportResultGasLimit */ 870000,
         /* _OVM_ETH */ "0x4200000000000000000000000000000000000006",
       ],
     },
+    "boba.mainnet": {
+      WitnetRequestBoard: [
+        /* _isUpgradable */ true,
+        /* _versionTag */ fromAscii(packageJson.version + "-trustable-boba"),
+        /* _l2GasPrice */ 15000000,
+        /* _l2ReportResultGasLimit */ 1870000,
+        /* _OVM_ETH */ "0x4200000000000000000000000000000000000006",
+      ],
+    }
   },
   compilers: {
     default: {
