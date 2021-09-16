@@ -32,10 +32,10 @@ module.exports = {
         /* _isUpgradable */ true,
         /* _versionTag */ fromAscii(packageJson.version + "-trustable-boba"),
         /* _l2GasPrice */ 15000000,
-        /* _l2ReportResultGasLimit */ 1870000,
+        /* _l2ReportResultGasLimit */ 18000000,
         /* _OVM_ETH */ "0x4200000000000000000000000000000000000006",
       ],
-    }
+    },
   },
   compilers: {
     default: {
@@ -72,17 +72,6 @@ module.exports = {
   },
   networks: {
     default: {
-      "ethereum.ropsten": {
-        network_id: 3,
-        host: "localhost",
-        port: 8543,
-      },
-      "ethereum.rinkeby": {
-        network_id: 4,
-        host: "localhost",
-        port: 8544,
-        skipDryRun: true,
-      },
       "ethereum.goerli": {
         network_id: 5,
         host: "localhost",
@@ -100,21 +89,16 @@ module.exports = {
         host: "localhost",
         port: 9545,
       },
-    },
-    conflux: {
-      "conflux.testnet": {
+      "ethereum.rinkeby": {
+        network_id: 4,
         host: "localhost",
-        port: 8540,
-        network_id: 1,
-        gasPrice: 10,
+        port: 8544,
         skipDryRun: true,
       },
-      "conflux.mainnet": {
+      "ethereum.ropsten": {
+        network_id: 3,
         host: "localhost",
-        port: 9540,
-        network_id: 1029,
-        gasPrice: 1,
-        skipDryRun: true,
+        port: 8543,
       },
     },
     boba: {
@@ -132,6 +116,22 @@ module.exports = {
         network_id: 44787,
         host: "localhost",
         port: 8538,
+        skipDryRun: true,
+      },
+    },
+    conflux: {
+      "conflux.testnet": {
+        host: "localhost",
+        port: 8540,
+        network_id: 1,
+        gasPrice: 10,
+        skipDryRun: true,
+      },
+      "conflux.tethys": {
+        host: "localhost",
+        port: 9540,
+        network_id: 1029,
+        gasPrice: 1,
         skipDryRun: true,
       },
     },
