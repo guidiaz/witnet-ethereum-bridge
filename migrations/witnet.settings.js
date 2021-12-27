@@ -18,6 +18,13 @@ module.exports = {
         /* _reportResultGasLimit */ 135000,
       ],
     },
+    "harmony": {
+      WitnetRequestBoard: [
+        /* _isUpgradable */ true,
+        /* _verstionTag */ fromAscii(packageJson.version + "-trustable"),
+        /* _reportResultGasLimit */ 1181190,
+      ],
+    },
     "metis.rinkeby": {
       WitnetRequestBoard: [
         /* _isUpgradable */ true,
