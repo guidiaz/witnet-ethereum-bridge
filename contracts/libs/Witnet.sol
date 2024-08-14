@@ -11,10 +11,65 @@ library Witnet {
     using WitnetCBOR for WitnetCBOR.CBOR;
     using WitnetCBOR for WitnetCBOR.CBOR[];
 
+    struct Beacon {
+        uint32  index;
+        uint32  prevIndex;
+        bytes24 prevRoot;
+        bytes32 nextBLS;
+        bytes16 ddrTalliesMerkleRoot;
+        bytes16 droTalliesMerkleRoot;
+    }
+
+    function root(Beacon memory self) internal pure returns (bytes24) {
+        return bytes24(keccak256(abi.encode(
+            self.index,
+            self.prevIndex,
+            self.prevRoot,
+            self.nextBLS,
+            self.ddrTalliesMerkleRoot,
+            self.droTalliesMerkleRoot
+        )));
+    }
+
+    struct FastForward {
+        Beacon beacon;
+        bytes32[] signatures;
+    }
+
+    function determineBeaconIndex(uint256 timestamp) internal pure returns (uint32) {
+        // todo
+        return uint32(timestamp / 200);
+    }
+
+    function determineEpochFromTimestamp(uint256 timestamp) internal pure returns (uint64) {
+        // todo
+        return uint64(timestamp / 20);
+    }
+
+    function determineTimestampFromEpoch(uint64 epoch) internal pure returns (uint256) {
+        // todo
+        return epoch * 20;
+    }
+
+    function verifyFastForward(Beacon storage self, FastForward[] calldata ff) internal pure returns (Beacon memory cursor) {
+        cursor = self;
+        for (uint _ix = 0; _ix < ff.length; _ix ++) {
+            assert(
+                ff[_ix].beacon.prevIndex == cursor.index
+                    && ff[_ix].beacon.prevRoot == root(cursor)
+            );
+            // todo: verify fast forward signatures
+            cursor = ff[_ix].beacon;
+        }
+        cursor.prevIndex = ff[0].beacon.prevIndex;
+        cursor.prevRoot = ff[0].beacon.prevRoot;
+    }
+
     /// Struct containing both request and response data related to every query posted to the Witnet Request Board
     struct Query {
         QueryRequest request;
         QueryResponse response;
+        uint256 block;
     }
 
     /// Data kept in EVM-storage for every Request posted to the Witnet Request Board.
@@ -24,7 +79,7 @@ library Witnet {
         uint72   evmReward;              // EVM amount in wei eventually to be paid to the legit result reporter.
         bytes    radonBytecode;          // Optional: Witnet Data Request bytecode to be solved by the Witnet blockchain.
         bytes32  radonRadHash;           // Optional: Previously verified hash of the Witnet Data Request to be solved.
-        RadonSLA radonSLA;               // Minimum Service-Level parameters to be committed by the Witnet blockchain. 
+        RadonSLA radonSLA;               // Minimum Service-Level parameters to be committed by the Witnet blockchain.
     }
 
     /// QueryResponse metadata and result as resolved by the Witnet blockchain.
@@ -34,6 +89,93 @@ library Witnet {
         uint32  resultTimestamp;         // Unix timestamp (seconds) at which the data request was resolved in the Witnet blockchain.
         bytes32 resultTallyHash;         // Unique hash of the commit/reveal act in the Witnet blockchain that resolved the data request.
         bytes   resultCborBytes;         // CBOR-encode result to the request, as resolved in the Witnet blockchain.
+    }
+
+    struct QueryResponseReport {
+        uint256 queryId;
+        bytes32 queryHash;               // KECCAK256(channel | queryId | blockhash(query.block))
+        bytes   witDrRelayerSignature;   // ECDSA.signature(queryHash)
+        bytes32 witDrTxHash;
+        uint64  witDrResultEpoch;
+        bytes   witDrResultCborBytes;
+    }
+
+    struct QueryReport {
+        bytes32  witDrRadHash;
+        RadonSLA witDrSLA;
+        bytes32  witDrTxHash;
+        uint64   witDrResultEpoch;
+        bytes    witDrResultCborBytes;
+    }
+
+    function _merkleHash(bytes32 _a, bytes32 _b) private pure returns (bytes32 _hash) {
+        assembly {
+            mstore(0x0, _a)
+            mstore(0x20, _b)
+            _hash := keccak256(0x0, 0x40)
+        }
+    }
+
+    function merkleHash(bytes32 a, bytes32 b) internal pure returns (bytes32) {
+        return (a < b
+            ? _merkleHash(a, b)
+            : _merkleHash(b, a)
+        );
+    }
+
+    function merkleRoot(bytes32[] memory proof, bytes32 leaf) internal pure returns (bytes32 _root) {
+        _root = leaf;
+        for (uint _ix = 0; _ix < proof.length; _ix ++) {
+            _root = merkleHash(_root, proof[_ix]);
+        }
+    }
+
+    function radHash(bytes calldata bytecode) internal pure returns (bytes32) {
+        return keccak256(bytecode);
+    }
+
+    function recoverAddr(bytes memory signature, bytes32 hash_)
+        internal pure 
+        returns (address)
+    {
+        if (signature.length != 65) {
+            return (address(0));
+        }
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+        assembly {
+            r := mload(add(signature, 0x20))
+            s := mload(add(signature, 0x40))
+            v := byte(0, mload(add(signature, 0x60)))
+        }
+        if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
+            return address(0);
+        }
+        if (v != 27 && v != 28) {
+            return address(0);
+        }
+        return ecrecover(hash_, v, r, s);
+    }
+
+    function tallyHash(QueryResponseReport calldata self) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            self.queryHash,
+            self.witDrRelayerSignature,
+            self.witDrTxHash,
+            self.witDrResultEpoch,
+            self.witDrResultCborBytes
+        ));
+    }
+
+    function tallyHash(QueryReport calldata self) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            self.witDrRadHash,
+            self.witDrSLA,
+            self.witDrTxHash,
+            self.witDrResultEpoch,
+            self.witDrResultCborBytes
+        ));
     }
 
     /// QueryResponse status from a requester's point of view.

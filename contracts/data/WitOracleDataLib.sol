@@ -12,6 +12,7 @@ import "../libs/Witnet.sol";
 /// @author The Witnet Foundation.
 library WitOracleDataLib {  
 
+    using Witnet for Witnet.Beacon;
     using Witnet for Witnet.QueryRequest;
     using WitnetCBOR for WitnetCBOR.CBOR;
 
@@ -23,6 +24,8 @@ library WitOracleDataLib {
         uint256 nonce;
         mapping (uint => Witnet.Query) queries;
         mapping (address => bool) reporters;
+        mapping (uint256 => Witnet.Beacon) beacons;
+        uint256 lastKnownBeaconIndex;
     }
 
     // ================================================================================================================
@@ -55,6 +58,31 @@ library WitOracleDataLib {
             resultTallyHash: resultTallyHash,
             resultCborBytes: resultCborBytes
         });
+    }
+
+    function queryHashOf(Storage storage self, bytes4 channel, uint256 queryId) internal view returns (bytes32) {
+        Witnet.Query storage __query = self.queries[queryId];
+        return keccak256(abi.encode(
+            channel,
+            queryId,
+            blockhash(__query.block),
+            __query.request.radonRadHash != bytes32(0)
+                ? __query.request.radonRadHash 
+                : keccak256(bytes(__query.request.radonBytecode)),
+            __query.request.radonSLA
+        ));
+    }
+
+    function seekBeacon(uint256 _index) internal view returns (Witnet.Beacon storage) {
+        return data().beacons[_index];
+    }
+
+    function seekLastKnownBeacon() internal view returns (Witnet.Beacon storage) {
+        return data().beacons[data().lastKnownBeaconIndex];
+    }
+
+    function seekLastKnownBeaconIndex() internal view returns (uint256) {
+        return data().lastKnownBeaconIndex;
     }
 
     /// Gets query storage by query id.
@@ -291,5 +319,20 @@ library WitOracleDataLib {
             } catch (bytes memory) {}
         }
         evmCallbackActualGas -= gasleft();
+    }
+
+    function verifyFastForwards(Witnet.FastForward[] calldata ff) public view returns (Witnet.Beacon memory cursor) {
+        cursor = seekLastKnownBeacon();
+        for (uint _ix = 0; _ix < ff.length; _ix ++) {
+            require(
+                ff[_ix].beacon.prevIndex == cursor.index
+                    && ff[_ix].beacon.prevRoot == cursor.root(),
+                "WitOracleDataLib: invalid fast forwards"
+            );
+            // todo: verify fast forward signatures
+            cursor = ff[_ix].beacon;
+        }
+        cursor.prevIndex = ff[0].beacon.prevIndex;
+        cursor.prevRoot = ff[0].beacon.prevRoot;
     }
 }

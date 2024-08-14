@@ -6,7 +6,8 @@ pragma experimental ABIEncoderV2;
 import "../WitnetUpgradableBase.sol";
 import "../../WitOracle.sol";
 import "../../data/WitOracleDataLib.sol";
-import "../..//interfaces/IWitOracleLegacy.sol";
+import "../../interfaces/IWitOracleBlocks.sol";
+import "../../interfaces/IWitOracleLegacy.sol";
 import "../../interfaces/IWitOracleReporter.sol";
 import "../../interfaces/IWitOracleAdminACLs.sol";
 import "../../interfaces/IWitOracleConsumer.sol";
@@ -23,15 +24,20 @@ abstract contract WitOracleTrustableBase
         Payable,
         WitOracle,
         WitnetUpgradableBase,
+        IWitOracleBlocks,
         IWitOracleLegacy,
         IWitOracleReporter,
         IWitOracleAdminACLs
 {
     using Witnet for bytes;
+    using Witnet for uint64;
     using Witnet for Witnet.QueryRequest;
     using Witnet for Witnet.QueryResponse;
     using Witnet for Witnet.RadonSLA;
     using Witnet for Witnet.Result;
+
+    using WitnetCBOR for WitnetCBOR.CBOR;
+    using WitOracleDataLib for WitOracleDataLib.Storage;
 
     WitOracleRequestFactory public immutable override factory;
     WitOracleRadonRegistry public immutable override registry;
@@ -39,7 +45,7 @@ abstract contract WitOracleTrustableBase
     bytes4 public immutable override specs = type(WitOracle).interfaceId;
 
     function channel() virtual override public view returns (bytes4) {
-        return bytes4(keccak256(abi.encode(address(this), block.chainid)));
+        return bytes4(keccak256(abi.encode(bytes3("evm"), address(this), block.chainid)));
     }
 
     function class()
@@ -100,9 +106,15 @@ abstract contract WitOracleTrustableBase
         _require(
             __storage().reporters[msg.sender],
             "unauthorized reporter"
-        );
-        _;
+        ); _;
     } 
+
+    modifier validQueryHash(uint256 _queryId, bytes32 _queryHash) {
+        _require(
+            _queryHash == __storage().queryHashOf(channel(), _queryId),
+            "invalid query hash"
+        ); _;
+    }
     
     constructor(
             WitOracleRadonRegistry _registry,
@@ -677,110 +689,49 @@ abstract contract WitOracleTrustableBase
         return WitOracleDataLib.extractWitnetDataRequests(registry, _queryIds);
     }
 
-    /// Reports the Witnet-provable result to a previously posted request. 
-    /// @dev Will assume `block.timestamp` as the timestamp at which the request was solved.
-    /// @dev Fails if:
-    /// @dev - the `_queryId` is not in 'Posted' status.
-    /// @dev - provided `_resultTallyHash` is zero;
-    /// @dev - length of provided `_result` is zero.
-    /// @param _queryId The unique identifier of the data request.
-    /// @param _resultTallyHash Hash of the commit/reveal witnessing act that took place in the Witnet blockahin.
-    /// @param _resultCborBytes The result itself as bytes.
-    function reportResult(
-            uint256 _queryId,
-            bytes32 _resultTallyHash,
-            bytes calldata _resultCborBytes
-        )
-        external override
+    function reportQueryResponse(Witnet.QueryResponseReport calldata _report)
+        virtual override public 
         onlyReporters
-        inStatus(_queryId, Witnet.QueryStatus.Posted)
+        inStatus(
+            _report.queryId, 
+            Witnet.QueryStatus.Posted
+        )
+        validQueryHash(
+            _report.queryId,
+            _report.queryHash
+        )
         returns (uint256)
     {
-        // results cannot be empty:
-        _require(
-            _resultCborBytes.length != 0, 
-            "result cannot be empty"
-        );
-        // do actual report and return reward transfered to the reproter:
-        // solhint-disable not-rely-on-time
         return __reportResultAndReward(
-            _queryId,
-            uint32(block.timestamp),
-            _resultTallyHash,
-            _resultCborBytes
+            Witnet.recoverAddr(_report.witDrRelayerSignature, _report.queryHash),
+            _report.queryId,
+            _report.witDrResultEpoch.determineTimestampFromEpoch(),
+            _report.witDrTxHash,
+            _report.witDrResultCborBytes
         );
     }
-
-    /// Reports the Witnet-provable result to a previously posted request.
-    /// @dev Fails if:
-    /// @dev - called from unauthorized address;
-    /// @dev - the `_queryId` is not in 'Posted' status.
-    /// @dev - provided `_resultTallyHash` is zero;
-    /// @dev - length of provided `_resultCborBytes` is zero.
-    /// @param _queryId The unique query identifier
-    /// @param _resultTimestamp Timestamp at which the reported value was captured by the Witnet blockchain. 
-    /// @param _resultTallyHash Hash of the commit/reveal witnessing act that took place in the Witnet blockahin.
-    /// @param _resultCborBytes The result itself as bytes.
-    function reportResult(
-            uint256 _queryId,
-            uint32  _resultTimestamp,
-            bytes32 _resultTallyHash,
-            bytes calldata _resultCborBytes
-        )
-        external
-        override
-        onlyReporters
-        inStatus(_queryId, Witnet.QueryStatus.Posted)
-        returns (uint256)
-    {
-        // validate timestamp
-        _require(
-            _resultTimestamp > 0,
-            "bad timestamp"
-        );
-        // results cannot be empty
-        _require(
-            _resultCborBytes.length != 0, 
-            "result cannot be empty"
-        );
-        // do actual report and return reward transfered to the reproter:
-        return  __reportResultAndReward(
-            _queryId,
-            _resultTimestamp,
-            _resultTallyHash,
-            _resultCborBytes
-        );
-    }
-
-    /// @notice Reports Witnet-provided results to multiple requests within a single EVM tx.
-    /// @notice Emits either a WitOracleQueryResponse* or a BatchReportError event per batched report.
-    /// @dev Fails only if called from unauthorized address.
-    /// @param _batchResults Array of BatchResult structs, every one containing:
-    ///         - unique query identifier;
-    ///         - timestamp of the solving tally txs in Witnet. If zero is provided, EVM-timestamp will be used instead;
-    ///         - hash of the corresponding data request tx at the Witnet side-chain level;
-    ///         - data request result in raw bytes.
-    function reportResultBatch(IWitOracleReporter.BatchResult[] calldata _batchResults)
-        external override
+    
+    function reportQueryResponseBatch(Witnet.QueryResponseReport[] calldata _batch)
+        virtual override external 
         onlyReporters
         returns (uint256 _batchReward)
     {
-        for (uint _i = 0; _i < _batchResults.length; _i ++) {
+        for (uint _ix = 0; _ix < _batch.length; _ix ++) {
+            Witnet.QueryResponseReport calldata _report = _batch[_ix];
             if (
-                WitOracleDataLib.seekQueryStatus(_batchResults[_i].queryId)
+                WitOracleDataLib.seekQueryStatus(_report.queryId)
                     != Witnet.QueryStatus.Posted
             ) {
                 emit BatchReportError(
-                    _batchResults[_i].queryId,
+                    _report.queryId,
                     WitOracleDataLib.notInStatusRevertMessage(Witnet.QueryStatus.Posted)
                 );
             } else if (
-                uint256(_batchResults[_i].resultTimestamp) > block.timestamp
-                    || _batchResults[_i].resultTimestamp == 0
-                    || _batchResults[_i].resultCborBytes.length == 0
+                _report.queryHash != __storage().queryHashOf(channel(), _report.queryId)
+                    || _report.witDrResultCborBytes.length == 0
             ) {
                 emit BatchReportError(
-                    _batchResults[_i].queryId, 
+                    _report.queryId, 
                     string(abi.encodePacked(
                         class(),
                         ": invalid report data"
@@ -788,10 +739,11 @@ abstract contract WitOracleTrustableBase
                 );
             } else {
                 _batchReward += __reportResult(
-                    _batchResults[_i].queryId,
-                    _batchResults[_i].resultTimestamp,
-                    _batchResults[_i].resultTallyHash,
-                    _batchResults[_i].resultCborBytes
+                    Witnet.recoverAddr(_report.witDrRelayerSignature, _report.queryHash),
+                    _report.queryId,
+                    _report.witDrResultEpoch.determineTimestampFromEpoch(),
+                    _report.witDrTxHash,
+                    _report.witDrResultCborBytes
                 );
             }
         }   
@@ -802,6 +754,58 @@ abstract contract WitOracleTrustableBase
                 _batchReward
             );
         }
+    }
+
+    function rollupQueryResponseProof(
+            Witnet.FastForward[] calldata _ff, 
+            Witnet.QueryResponseReport calldata _report,
+            bytes32[] calldata _merkle
+        ) 
+        virtual override external
+    {
+        Witnet.Beacon memory _beacon;
+        uint32 _beaconIndex = 1 + _report.witDrResultEpoch / 10;
+        if (_beaconIndex > __storage().lastKnownBeaconIndex) {
+            _require(_ff[_ff.length].beacon.index == _beaconIndex, "mismatching beacon");
+            _beacon = rollupBeacons(_ff);
+        } else {
+            _beacon = __storage().beacons[_beaconIndex];
+            _require(_beacon.index == _beaconIndex, "missing beacon");
+        }
+        Witnet.QueryStatus _queryStatus = WitOracleDataLib.seekQueryStatus(_report.queryId);
+        if (_queryStatus == Witnet.QueryStatus.Reported) {
+            // todo
+
+        } else if (_queryStatus == Witnet.QueryStatus.Posted) {
+            // todo
+
+        } else if (_queryStatus == Witnet.QueryStatus.Finalized) {
+            _revert("already finalized");
+        
+        } else {
+            _revert("unknown query");
+        }
+    }
+
+    function rollupQueryReportProof(
+            Witnet.FastForward[] calldata, 
+            Witnet.QueryReport calldata , 
+            bytes32[] calldata
+        )
+        virtual override external
+    {
+        // TODO
+    }
+
+    function verifyQueryReportProof(
+            Witnet.QueryReport calldata report, 
+            bytes32[] calldata
+        )
+        virtual override 
+        external view 
+        returns (bool)
+    {
+        // TODO
     }
 
 
@@ -840,6 +844,61 @@ abstract contract WitOracleTrustableBase
             __storage().reporters[_reporter] = false;
         }
         emit ReportersUnset(_exReporters);
+    }
+
+
+    // ================================================================================================================
+    // --- IWitOracleBlocks -------------------------------------------------------------------------------------------
+
+    function determineBeaconIndexFromTimestamp(uint256 timestamp)
+        virtual override
+        external pure
+        returns (uint32)
+    {
+        return Witnet.determineBeaconIndexFromTimestamp(timestamp);
+    }
+    
+    function determineEpochFromTimestamp(uint256 timestamp)
+        virtual override
+        external pure
+        returns (uint64)
+    {
+        return Witnet.determineEpochFromTimestamp(timestamp);
+    }
+
+    function getBeaconByIndex(uint32 index)
+        virtual override
+        public view
+        returns (Witnet.Beacon memory)
+    {
+        return WitOracleDataLib.seekBeacon(index);
+    }
+
+    function getLastKnownBeacon() 
+        virtual override
+        public view
+        returns (Witnet.Beacon memory)
+    {
+        return WitOracleDataLib.seekLastKnownBeacon();
+    }
+
+    function getLastKnownBeaconIndex()
+        virtual override
+        public view
+        returns (uint32)
+    {
+        return uint32(WitOracleDataLib.seekLastKnownBeaconIndex());
+    }
+
+    function rollupBeacons(Witnet.FastForward[] calldata ff)
+        virtual override public 
+        returns (Witnet.Beacon memory head)
+    {
+        head = WitOracleDataLib.verifyFastForwards(ff);
+        // TODO: can we delete WitOracleDataLib.data().beacons[head.prevIndex]?
+        WitOracleDataLib.data().beacons[head.index] = head;
+        WitOracleDataLib.data().lastKnownBeaconIndex = head.index;
+        emit Rollup(head);
     }
 
 

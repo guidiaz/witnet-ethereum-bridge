@@ -88,11 +88,11 @@ interface IWitOracle {
     /// @dev - the RAD hash was not previously verified by the WitOracleRadonRegistry registry;
     /// @dev - invalid SLA parameters were provided;
     /// @dev - insufficient value is paid as reward.
-    /// @param queryRAD The RAD hash of the data request to be solved by Witnet.
+    /// @param queryRadHash The RAD hash of the data request to be solved by Witnet.
     /// @param querySLA The data query SLA to be fulfilled on the Witnet blockchain.
     /// @return queryId Unique query identifier.
     function postRequest(
-            bytes32 queryRAD, 
+            bytes32 queryRadHash, 
             Witnet.RadonSLA calldata querySLA
         ) external payable returns (uint256 queryId);
 
@@ -106,19 +106,19 @@ interface IWitOracle {
     /// @dev - the RAD hash was not previously verified by the WitOracleRadonRegistry registry;
     /// @dev - invalid SLA parameters were provided;
     /// @dev - insufficient value is paid as reward.
-    /// @param queryRAD The RAD hash of the data request to be solved by Witnet.
+    /// @param queryRadHash The RAD hash of the data request to be solved by Witnet.
     /// @param querySLA The data query SLA to be fulfilled on the Witnet blockchain.
     /// @param queryCallbackGasLimit Maximum gas to be spent when reporting the data request result.
     /// @return queryId Unique query identifier.
     function postRequestWithCallback(
-            bytes32 queryRAD,
+            bytes32 queryRadHash,
             Witnet.RadonSLA calldata querySLA,
             uint24 queryCallbackGasLimit
         ) external payable returns (uint256 queryId);
 
     function postRequestWithCallback(
             IWitOracleConsumer consumer,
-            bytes32 queryRAD,
+            bytes32 queryRadHash,
             Witnet.RadonSLA calldata querySLA,
             uint24 queryCallbackGasLimit
         ) external payable returns (uint256 queryId);
